@@ -1,36 +1,36 @@
 import cv2
 import numpy as np
-# import RPi.GPIO as GPIO
-# import time
-# import threading
-# import matplotlib.pyplot as plt
+import RPi.GPIO as GPIO
+import time
+import threading
+import matplotlib.pyplot as plt
 
 #捕获摄像头
 cap = cv2.VideoCapture(0)
 
 # 设置摄像头参数，第一个和第二个为像素大小，第三个表示帧率
-cap.set(cv2.CAP_PROP_FRAME_WIDTH, 360)
-cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 240)
+cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
 cap.set(cv2.CAP_PROP_FPS, 17)
 
 #树莓派输出控制
-# EA, I2, I1, EB, I4, I3, LS, RS = (13, 19, 26, 16, 20, 21, 6, 12)
-# FREQUENCY = 50
-# GPIO.setmode(GPIO.BCM)
-# GPIO.setup([EA, I2, I1, EB, I4, I3], GPIO.OUT)
-# GPIO.setup([LS, RS],GPIO.IN)
-# GPIO.output([EA, I2, EB, I3], GPIO.LOW)
-# GPIO.output([I1, I4], GPIO.HIGH)
-#
-# pwma = GPIO.PWM(EA, FREQUENCY)
-# pwmb = GPIO.PWM(EB, FREQUENCY)
-# pwma.start(0)
-# pwmb.start(0)
-#
-# lspeed = 0
-# rspeed = 0
-# lcounter = 0
-# rcounter = 0
+EA, I2, I1, EB, I4, I3, LS, RS = (13, 19, 26, 16, 20, 21, 6, 5)
+FREQUENCY = 50
+GPIO.setmode(GPIO.BCM)
+GPIO.setup([EA, I2, I1, EB, I4, I3], GPIO.OUT)
+GPIO.setup([LS, RS],GPIO.IN)
+GPIO.output([EA, I2, EB, I3], GPIO.LOW)
+GPIO.output([I1, I4], GPIO.HIGH)
+
+pwma = GPIO.PWM(EA, FREQUENCY)
+pwmb = GPIO.PWM(EB, FREQUENCY)
+pwma.start(0)
+pwmb.start(0)
+
+lspeed = 0
+rspeed = 0
+lcounter = 0
+rcounter = 0
 
 class PID:
 
@@ -98,40 +98,40 @@ class PD:
         self.Kd = derivative_gain
 
 
-# def my_callback(channel):
-#     global lcounter
-#     global rcounter
-#     if (channel == LS):
-#         lcounter += 1
-#     elif (channel == RS):
-#         rcounter += 1
-#
-# def getspeed():
-#     global rspeed
-#     global lspeed
-#     global lcounter
-#     global rcounter
-#     GPIO.add_event_detect(LS, GPIO.RISING, callback=my_callback)
-#     GPIO.add_event_detect(RS, GPIO.RISING, callback=my_callback)
-#     while True:
-#         rspeed = (rcounter / 585.0)
-#         lspeed = (lcounter / 585.0)
-#         rcounter = 0
-#         lcounter = 0
-#         time.sleep(0.1)
-#
-# thread1 = threading.Thread(target=getspeed)
-# thread1.start()
+def my_callback(channel):
+    global lcounter
+    global rcounter
+    if (channel == LS):
+        lcounter += 1
+    elif (channel == RS):
+        rcounter += 1
 
-# l_origin_duty = 5
-# r_origin_duty = 5
-# pwma.start(l_origin_duty)
-# pwmb.start(r_origin_duty)
-# L_control = PID(40, 0, 10, 0.1, l_origin_duty)
-# R_control = PID(40, 0, 11, 0.13, r_origin_duty)
+def getspeed():
+    global rspeed
+    global lspeed
+    global lcounter
+    global rcounter
+    GPIO.add_event_detect(LS, GPIO.RISING, callback=my_callback)
+    GPIO.add_event_detect(RS, GPIO.RISING, callback=my_callback)
+    while True:
+        rspeed = (rcounter / 585.0)
+        lspeed = (lcounter / 585.0)
+        rcounter = 0
+        lcounter = 0
+        time.sleep(0.1)
+
+thread1 = threading.Thread(target=getspeed)
+thread1.start()
+
+l_origin_duty = 5
+r_origin_duty = 5
+pwma.start(l_origin_duty)
+pwmb.start(r_origin_duty)
+L_control = PID(40, 0, 10, 0.1, l_origin_duty)
+R_control = PID(40, 0, 11, 0.13, r_origin_duty)
 
 #图像PD管理函数
-Control = PD(0.6,0.1,120)
+Control = PD(0.6,0.1,320)
 
 """
 在OpenCV中，HSV（色相、饱和度、明度）是一种常用的颜色空间，它可以方便地进行颜色的识别和处理。
@@ -166,6 +166,10 @@ higher_color = np.array([80, 200, 255])
 
 """
 
+Red_Eable = 3;
+Yellow_Eable = 4;
+Green_Eable = 5;
+
 # 预定义公共内核
 kernel_5x5 = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
 
@@ -173,10 +177,7 @@ def color_processing(hsv_img, lower, upper, max_contours=1):
     """通用颜色处理函数"""
     mask = cv2.inRange(hsv_img, lower, upper)
     dilate = cv2.dilate(mask, kernel_5x5, iterations=1)
-    cnts, _ = cv2.findContours(dilate, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
-
-    print(cnts)
-
+    _ ,cnts, _ = cv2.findContours(dilate, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
     if not cnts:
         return ()  # 返回空元组
 
@@ -193,46 +194,58 @@ def color_processing(hsv_img, lower, upper, max_contours=1):
 
 # 修改后的颜色识别函数（保持原有注释不变）
 def Red_Identify(hsv):
-    # 二值化处理，表示HSV中颜色的范围
-    lower_color = np.array([150, 155, 100])
-    higher_color = np.array([190, 255, 255])
 
-    result = color_processing(hsv, lower_color, higher_color)
-    return result if result else (0, 0, 0, 0)
+    if Red_Eable != 3:
+        return 0,0,0,0
+    else:
+        # 二值化处理，表示HSV中颜色的范围
+        lower_color = np.array([0, 125, 100])
+        higher_color = np.array([10, 255, 255])
+
+        result = color_processing(hsv, lower_color, higher_color)
+        return result if result else (0, 0, 0, 0)
 
 
 def Yellow_Identify(hsv):
-    # 二值化处理，表示HSV中颜色的范围
-    lower_color = np.array([15, 70, 100])
-    higher_color = np.array([40, 200, 255])
 
-    result = color_processing(hsv, lower_color, higher_color)
-    return result if result else (0, 0, 0, 0)
+    if Yellow_Eable != 3:
+        return 0,0,0,0
+    else:
+        # 二值化处理，表示HSV中颜色的范围
+        lower_color = np.array([15, 70, 100])
+        higher_color = np.array([40, 200, 255])
+
+        result = color_processing(hsv, lower_color, higher_color)
+        return result if result else (0, 0, 0, 0)
 
 
 def Greem_Identify(hsv):
-    # 二值化处理，表示HSV中颜色的范围
-    lower_color = np.array([40, 40, 40])
-    higher_color = np.array([90, 255, 255])
+    if Green_Eable != 5:
+        return 0,0,0,0
+    else:
+        # 二值化处理，表示HSV中颜色的范围
+        lower_color = np.array([40, 40, 40])
+        higher_color = np.array([90, 255, 255])
 
-    results = color_processing(hsv, lower_color, higher_color, max_contours=2)
-    if not results:
-        return (0, 0, 0, 0, 0, 0, 0, 0)
+        results = color_processing(hsv, lower_color, higher_color, max_contours=2)
 
-    if len(results) == 1:
-        x, y, w, h = results[0]
-        return (x, y, w, h, 0, 0, 0, 0)
+        if not results:
+            return (0, 0, 0, 0, 0, 0, 0, 0)
 
-    # 按面积排序返回结果
-    (x1, y1, w1, h1), (x2, y2, w2, h2) = sorted(results,
-                                                key=lambda r: r[2] * r[3],
-                                                reverse=True)
-    return (x1, y1, w1, h1, x2, y2, w2, h2)
+        if len(results) == 1:
+            x, y, w, h = results[0]
+            return (x, y, w, h, 0, 0, 0, 0)
+
+        # 按面积排序返回结果
+        (x1, y1, w1, h1), (x2, y2, w2, h2) = sorted(results,
+                                                    key=lambda r: r[2] * r[3],
+                                                    reverse=True)
+        return (x1, y1, w1, h1, x2, y2, w2, h2)
 
 def MaxClolor_Identify(img,hsv):
     # 优先检测红色
     x0, y0, w0, h0 = Red_Identify(hsv)
-    if w0 * h0 > 4000:  # 红色检测成功
+    if w0 * h0 > 10000:  # 红色检测成功
         # 绘制红色框
         cv2.rectangle(img, (x0, y0), (x0 + w0, y0 + h0), (0, 0, 255), 3)
         cv2.circle(img, (x0 + (w0 // 2), y0 + (h0 // 2)), 6, (0, 0, 255), 2)
@@ -241,7 +254,7 @@ def MaxClolor_Identify(img,hsv):
 
     # 红色未检测到，检测黄色
     x1, y1, w1, h1 = Yellow_Identify(hsv)
-    if w1 * h1 > 4000:  # 黄色检测成功
+    if w1 * h1 > 10000:  # 黄色检测成功
         # 绘制黄色框
         cv2.rectangle(img, (x1, y1), (x1 + w1, y1 + h1), (0, 255, 255), 3)
         cv2.circle( img, (x1 + (w1 // 2), y1 + (h1 // 2)), 6, (0, 255, 255), 2 )
@@ -250,11 +263,11 @@ def MaxClolor_Identify(img,hsv):
 
     # 黄红均未检测到，检测绿色
     gx1, gy1, gw1, gh1, gx2, gy2, gw2, gh2 = Greem_Identify(hsv)
-    if gw1 * gh1 > 4000 :  # 绿色检测成功
+    if gw1 * gh1 > 10000 :  # 绿色检测成功
         # 绘制绿色框（可能两个）
         cv2.rectangle(img, (gx1, gy1), (gx1 + gw1, gy1 + gh1), (0, 255, 0), 3)
         cv2.circle(img, (gx1 + (gw1 // 2), gy1 + (gh1 // 2)), 6, (0, 255, 0), 2)
-        if gw2 * gh2 > 2000:  # 存在第二个绿色区域
+        if gw2 * gh2 > 8000:  # 存在第二个绿色区域
             cv2.rectangle(img, (gx2, gy2), (gx2 + gw2, gy2 + gh2), (0, 255, 0), 3)
             cv2.circle(img, (gx2 + (gw2 // 2), gy2 + (gh2 // 2)), 6, (0, 255, 0), 2)
         cv2.imshow("identify", img)
@@ -264,25 +277,34 @@ def MaxClolor_Identify(img,hsv):
     cv2.imshow("identify", img)
     return 0, 0, 0, 0
 
-# def PID_Set(img,hsv):
-#     MAXH = 400
-#     flag,x1,w1,h = MaxClolor_Identify(img,hsv)
-#     if(flag == 1):
-#         if(h>MAXH):
-#
-#             pwma.ChangeDutyCycle(0.1)
-#             pwmb.ChangeDutyCycle(0.3)
-#             time.sleep(0.5)
-#             pwma.ChangeDutyCycle(0.3)
-#             pwmb.ChangeDutyCycle(0.2)
-#
-#         else:
-#
-#                 L_control.ideal_speed = 0.10 + Control.update(x1)
-#                 R_control.ideal_speed = 0.13 - Control.update(x2)
-#
-#                 pwma.ChangeDutyCycle(L_control.update(lspeed))
-#                 pwmb.ChangeDutyCycle(R_control.update(rspeed))
+def PID_Set(img,hsv):
+    MAXH = 400
+    flag,x1,w1,h = MaxClolor_Identify(img,hsv)
+    if(flag == 1):
+        if(h>MAXH):
+
+            L_control.ideal_speed = 0
+            R_control.ideal_speed = 0.2
+
+            pwma.ChangeDutyCycle(L_control.update(lspeed))
+            pwmb.ChangeDutyCycle(R_control.update(rspeed))
+
+            time.sleep(0.5)
+
+            L_control.ideal_speed = 0.3
+            R_control.ideal_speed = 0.2
+
+            pwma.ChangeDutyCycle(L_control.update(lspeed))
+            pwmb.ChangeDutyCycle(R_control.update(rspeed))
+
+        else:
+            Control.ideal_location = 120
+
+            L_control.ideal_speed = 0.10 + Control.update(x1)
+            R_control.ideal_speed = 0.13 - Control.update(x1)
+
+            pwma.ChangeDutyCycle(L_control.update(lspeed))
+            pwmb.ChangeDutyCycle(R_control.update(rspeed))
 #
 #     else:
 #         if(h>MAXH):
@@ -296,20 +318,20 @@ def MaxClolor_Identify(img,hsv):
 #             else if(x1+x2>gXmax):
 #                 PID_RIGHT()
 
-try:
-    while True:
-        # 循环读取每一帧
-        res, img = cap.read()
 
-        # 转换为HSV颜色模型
-        hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+while True:
+    # 循环读取每一帧
+    res, img = cap.read()
 
-        #获取图像并调整PID
-        # PID_Set(img,hsv)
+    # 转换为HSV颜色模型
+    hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
 
-except KeyboardInterrupt:
-    pass
-
+    # 获取图像并调整PID
+    MaxClolor_Identify(img, hsv)
+    # PID_Set(img,hsv)
+    key = cv2.waitKey(1) & 0xFF  # 检测键盘,最长等待1ms
+    if key == ord('q'):
+        break  # 按q时结束
 # pwma.stop()
 # pwmb.stop()
 # GPIO.cleanup()
